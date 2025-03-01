@@ -8,29 +8,31 @@ import streamlit as st
 
 class NNet(nn.Module):
 
-    def __init__(self):
+    def __init__(self,input_dim,output_dim,num_hidden_layers, neurons_per_layer, dropout_rate):
+        
         super().__init__()
-        self.input = nn.Linear(in_features=12,out_features=3)
-        self.dense1 = nn.Linear(in_features=3,out_features=2)
-        self.relu = nn.ReLU()
-        self.dense2 = nn.Linear(in_features=2,out_features=1)
-        self.sigmoid = nn.Sigmoid()
 
-    
-    def forward(self,x):
+        layers = []
 
-        x = self.input(x)
-        x = self.relu(x)
-        x = self.dense1(x)
-        x = self.relu(x)
-        x = self.dense2(x)
-        x = self.sigmoid(x)
+        for i in range(num_hidden_layers):
 
-        return x
+            layers.append(nn.Linear(input_dim, neurons_per_layer))
+            layers.append(nn.BatchNorm1d(neurons_per_layer))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))
+            input_dim = neurons_per_layer
+
+        layers.append(nn.Linear(neurons_per_layer, output_dim))
+        layers.append(nn.Sigmoid())
+        
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.model(x)
 
 if __name__=="__main__":
 
-    model = NNet()
+    model = NNet(12,1,2,32,0.5)
     model.load_state_dict(torch.load("model_complete.pth"))
 
     with open("label_encoding_gender.pkl","rb") as file:
@@ -82,7 +84,10 @@ if __name__=="__main__":
     final_df = pd.concat([geography_df,input_df.drop(["Geography"],axis=1)],axis=1)
     x_test = ss.transform(final_df)
     x_test_torch = tensor(x_test,dtype=torch.float32)
-    prediction = model(x_test_torch).round()
+
+    model.eval()
+    with torch.no_grad():
+        prediction = model(x_test_torch).round()
 
     if prediction > 0.5:
         st.write("Person is going to leave")
